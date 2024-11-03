@@ -1,0 +1,72 @@
+import urllib.request
+import csv
+from html.parser import HTMLParser
+
+class MyHTMLParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.products = []
+        self.current_tag = ''
+        self.product_name = ''
+        self.product_price = ''
+        self.product_rating = ''
+        self.inside_product = False
+    
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'div' and 'class' in attrs and 'product-item' in attrs['class']:
+            self.inside_product = True
+        if self.inside_product:
+            if tag == 'span' and 'class' in attrs and 'product-title' in attrs['class']:
+                self.current_tag = 'name'
+            elif tag == 'span' and 'class' in attrs and 'price' in attrs['class']:
+                self.current_tag = 'price'
+            elif tag == 'span' and 'class' in attrs and 'rating' in attrs['class']:
+                self.current_tag = 'rating'
+    
+    def handle_data(self, data):
+        if self.inside_product:
+            if self.current_tag == 'name':
+                self.product_name = data.strip()
+            elif self.current_tag == 'price':
+                self.product_price = data.strip()
+            elif self.current_tag == 'rating':
+                self.product_rating = data.strip()
+    
+    def handle_endtag(self, tag):
+        if tag == 'div' and self.inside_product:
+            self.inside_product = False
+            self.products.append([self.product_name, self.product_price, self.product_rating or 'No rating'])
+            self.product_name, self.product_price, self.product_rating = '', '', ''
+        self.current_tag = ''
+    
+    def get_products(self):
+        return self.products
+
+def get_html(url):
+    with urllib.request.urlopen(url) as response:
+        return response.read().decode('utf-8')
+
+def extract_product_info(url):
+    html = get_html(url)
+    parser = MyHTMLParser()
+    parser.feed(html)
+    return parser.get_products()
+
+def save_to_csv(products, filename):
+    with open(filename, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Product Name", "Price", "Rating"])
+        writer.writerows(products)
+
+def main():
+    url = 'https://www.example.com/category'  # Replace with the actual e-commerce URL
+    products = extract_product_info(url)
+    if products:
+        save_to_csv(products, 'products.csv')
+        print(f"Successfully saved {len(products)} products to 'products.csv'")
+    else:
+        print("No products found or failed to scrape.")
+
+if __name__ == "__main__":
+    main()
